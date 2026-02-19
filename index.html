@@ -80,41 +80,58 @@
     <h1>支付短链接提取器</h1>
     <p>粘贴支付长链接（例如包含 <code>checkout_session_id</code> 或 <code>session_id</code> 的链接），点击提取后会生成：<code>https://chatgpt.com/checkout/{processor}/{session}</code>。</p>
 
-    <textarea id="longUrl" placeholder="把支付长链接粘贴到这里..."></textarea>
+    <textarea id="longUrl" placeholder="把支付长链接粘贴到这里...&#10;也支持粘贴含文本的整段内容，工具会自动提取其中第一个 URL"></textarea>
     <div class="actions">
       <button id="extractBtn">提取短链接</button>
       <button id="copyBtn">复制结果</button>
     </div>
 
     <div id="result" class="result">等待输入...</div>
-    <div class="hint">支持直接输入短链接，会自动标准化；若无法提取，会提示缺少参数。</div>
+    <div class="hint">支持直接输入短链接，会自动标准化；若无法提取，会提示缺少参数。按 Ctrl/Cmd + Enter 可快速提取。</div>
   </main>
 
   <script>
-    function extractShortCheckoutUrl(input) {
+    function parseUrlFromText(input) {
       const raw = input.trim();
-      if (!raw) throw new Error('请输入链接。');
+      if (!raw) {
+        throw new Error('请输入链接。');
+      }
 
-      let url;
+      const urlMatch = raw.match(/https?:\/\/[^\s"'<>]+/i);
+      const candidate = urlMatch ? urlMatch[0] : raw;
+
       try {
-        url = new URL(raw);
+        return new URL(candidate);
       } catch {
         throw new Error('链接格式无效，请检查是否完整。');
       }
+    }
+
+    function getParamFromSearchOrHash(url, key) {
+      const fromSearch = url.searchParams.get(key);
+      if (fromSearch) return fromSearch;
+
+      const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+      const hashParams = new URLSearchParams(hash);
+      return hashParams.get(key);
+    }
+
+    function extractShortCheckoutUrl(input) {
+      const url = parseUrlFromText(input);
 
       const shortMatch = url.pathname.match(/^\/checkout\/([^/]+)\/([^/?#]+)/);
       if (shortMatch) {
         return `https://chatgpt.com/checkout/${shortMatch[1]}/${shortMatch[2]}`;
       }
 
-      const params = url.searchParams;
       const sessionId =
-        params.get('checkout_session_id') ||
-        params.get('session_id') ||
-        params.get('checkoutSessionId');
+        getParamFromSearchOrHash(url, 'checkout_session_id') ||
+        getParamFromSearchOrHash(url, 'session_id') ||
+        getParamFromSearchOrHash(url, 'checkoutSessionId');
+
       const processor =
-        params.get('processor_entity') ||
-        params.get('processor') ||
+        getParamFromSearchOrHash(url, 'processor_entity') ||
+        getParamFromSearchOrHash(url, 'processor') ||
         'openai_llc';
 
       if (!sessionId) {
@@ -127,7 +144,7 @@
     const longUrl = document.getElementById('longUrl');
     const result = document.getElementById('result');
 
-    document.getElementById('extractBtn').addEventListener('click', () => {
+    function runExtract() {
       try {
         const shortUrl = extractShortCheckoutUrl(longUrl.value);
         result.classList.remove('error');
@@ -135,6 +152,14 @@
       } catch (error) {
         result.classList.add('error');
         result.textContent = `❌ ${error.message}`;
+      }
+    }
+
+    document.getElementById('extractBtn').addEventListener('click', runExtract);
+
+    longUrl.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        runExtract();
       }
     });
 
