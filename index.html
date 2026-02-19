@@ -224,7 +224,11 @@
         return `https://chatgpt.com/checkout/${shortMatch[1]}/${shortMatch[2]}`;
       }
 
+      const payPathMatch = url.pathname.match(/^\/c\/pay\/(cs_[^/?#]+)/i) ||
+        url.pathname.match(/^\/pay\/(cs_[^/?#]+)/i);
+
       const sessionId =
+        (payPathMatch ? payPathMatch[1] : null) ||
         getParamFromSearchOrHash(url, 'checkout_session_id') ||
         getParamFromSearchOrHash(url, 'session_id') ||
         getParamFromSearchOrHash(url, 'checkoutSessionId');
