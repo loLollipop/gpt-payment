@@ -1,0 +1,8 @@
+{
+  "build": {
+    "commands": []
+  },
+  "start": {
+    "command": "npm start"
+  }
+}
