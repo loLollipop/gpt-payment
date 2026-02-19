@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatGPT 支付短链接提取器</title>
+  <style>
+    :root {
+      --bg-1: #06070d;
+      --bg-2: #0a0f1f;
+      --neon-cyan: #00f6ff;
+      --neon-pink: #ff2bd6;
+      --neon-purple: #8a5dff;
+      --text: #d7ecff;
+      --muted: #7ea1c2;
+      --panel: rgba(10, 16, 32, 0.72);
+      --border: rgba(0, 246, 255, 0.35);
+      --ok: #61ffb4;
+      --err: #ff4d7a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 20%, rgba(255, 43, 214, 0.18), transparent 40%),
+        radial-gradient(circle at 85% 70%, rgba(0, 246, 255, 0.16), transparent 42%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      overflow: hidden;
+    }
+
+    .scanline {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.03),
+        rgba(255, 255, 255, 0.03) 1px,
+        transparent 2px,
+        transparent 4px
+      );
+      mix-blend-mode: soft-light;
+      opacity: 0.35;
+      z-index: 1;
+    }
+
+    .grid {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0, 246, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 246, 255, 0.08) 1px, transparent 1px);
+      background-size: 56px 56px;
+      perspective: 500px;
+      transform: perspective(500px) rotateX(58deg) scale(1.8) translateY(24vh);
+      transform-origin: center bottom;
+      opacity: 0.22;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 20px;
+      padding: clamp(20px, 3vw, 40px);
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 52px);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--neon-cyan);
+      text-shadow:
+        0 0 8px rgba(0, 246, 255, 0.9),
+        0 0 24px rgba(0, 246, 255, 0.6),
+        0 0 44px rgba(138, 93, 255, 0.4);
+      align-self: start;
+    }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .editor,
+    .output {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 0;
+      outline: none;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 43, 214, 0.22),
+        0 0 22px rgba(0, 246, 255, 0.18);
+      color: var(--text);
+      font-size: clamp(14px, 1.5vw, 18px);
+      letter-spacing: 0.03em;
+    }
+
+    .editor {
+      min-height: 42vh;
+      resize: none;
+      padding: 20px;
+      line-height: 1.5;
+    }
+
+    .editor::placeholder { color: var(--muted); }
+
+    .output {
+      min-height: 70px;
+      display: flex;
+      align-items: center;
+      padding: 16px 20px;
+      word-break: break-all;
+    }
+
+    .output.error {
+      color: var(--err);
+      border-color: rgba(255, 77, 122, 0.55);
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 77, 122, 0.28),
+        0 0 20px rgba(255, 77, 122, 0.22);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(120px, 280px));
+      gap: 12px;
+      justify-content: end;
+    }
+
+    button {
+      border: 1px solid transparent;
+      background: linear-gradient(135deg, rgba(0, 246, 255, 0.18), rgba(255, 43, 214, 0.18));
+      color: var(--text);
+      font-size: clamp(14px, 1.3vw, 16px);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: 0.2s ease;
+      box-shadow: 0 0 14px rgba(0, 246, 255, 0.2);
+    }
+
+    button:hover {
+      border-color: var(--neon-cyan);
+      box-shadow:
+        0 0 14px rgba(0, 246, 255, 0.5),
+        0 0 28px rgba(255, 43, 214, 0.35);
+      transform: translateY(-1px);
+    }
+
+    @media (max-width: 768px) {
+      .app { padding: 16px; grid-template-rows: auto 1fr auto; }
+      .title { font-size: 26px; }
+      .editor { min-height: 48vh; padding: 16px; }
+      .controls { grid-template-columns: 1fr 1fr; }
+      button { padding: 12px 10px; letter-spacing: 0.08em; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid" aria-hidden="true"></div>
+  <div class="scanline" aria-hidden="true"></div>
+
+  <main class="app">
+    <h1 class="title">Payment Link Extractor</h1>
+
+    <section class="workbench">
+      <textarea id="longUrl" class="editor" placeholder="PASTE INPUT..."></textarea>
+      <div id="result" class="output">READY.</div>
+    </section>
+
+    <div class="controls">
+      <button id="extractBtn">Extract</button>
+      <button id="copyBtn">Copy</button>
+    </div>
+  </main>
+
+  <script>
+    function parseUrlFromText(input) {
+      const raw = input.trim();
+      if (!raw) {
+        throw new Error('请输入链接。');
+      }
+
+      const urlMatch = raw.match(/https?:\/\/[^\s"'<>]+/i);
+      const candidate = urlMatch ? urlMatch[0] : raw;
+
+      try {
+        return new URL(candidate);
+      } catch {
+        throw new Error('链接格式无效，请检查是否完整。');
+      }
+    }
+
+    function getParamFromSearchOrHash(url, key) {
+      const fromSearch = url.searchParams.get(key);
+      if (fromSearch) return fromSearch;
+
+      const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+      const hashParams = new URLSearchParams(hash);
+      return hashParams.get(key);
+    }
+
+    function extractShortCheckoutUrl(input) {
+      const url = parseUrlFromText(input);
+
+      const shortMatch = url.pathname.match(/^\/checkout\/([^/]+)\/([^/?#]+)/);
+      if (shortMatch) {
+        return `https://chatgpt.com/checkout/${shortMatch[1]}/${shortMatch[2]}`;
+      }
+
+      const sessionId =
+        getParamFromSearchOrHash(url, 'checkout_session_id') ||
+        getParamFromSearchOrHash(url, 'session_id') ||
+        getParamFromSearchOrHash(url, 'checkoutSessionId');
+
+      const processor =
+        getParamFromSearchOrHash(url, 'processor_entity') ||
+        getParamFromSearchOrHash(url, 'processor') ||
+        'openai_llc';
+
+      if (!sessionId) {
+        throw new Error('未找到 checkout_session_id / session_id 参数，无法提取。');
+      }
+
+      return `https://chatgpt.com/checkout/${processor}/${sessionId}`;
+    }
+
+    const longUrl = document.getElementById('longUrl');
+    const result = document.getElementById('result');
+
+    function runExtract() {
+      try {
+        const shortUrl = extractShortCheckoutUrl(longUrl.value);
+        result.classList.remove('error');
+        result.textContent = shortUrl;
+      } catch (error) {
+        result.classList.add('error');
+        result.textContent = `❌ ${error.message}`;
+      }
+    }
+
+    document.getElementById('extractBtn').addEventListener('click', runExtract);
+
+    longUrl.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        runExtract();
+      }
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      const text = result.textContent.trim();
+      if (!text || text.startsWith('❌') || text === 'READY.') {
+        result.classList.add('error');
+        result.textContent = '❌ 当前没有可复制的短链接。';
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const temp = document.createElement('textarea');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        temp.remove();
+      }
+      result.classList.remove('error');
+      result.textContent = `${text}  ✓`;
+    });
+  </script>
+</body>
+</html>
