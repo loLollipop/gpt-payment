@@ -6,7 +6,7 @@
 
 1. 打开 `index.html`。
 2. 粘贴支付长链接（例如包含 `checkout_session_id` / `session_id` 参数）。
-3. 点击 **提取短链接**。
+3. 点击 **提取短链接**（或在输入框按 `Ctrl/Cmd + Enter`）。
 4. 可点击 **复制结果**。
 
 短链接格式：
@@ -34,3 +34,4 @@ https://chatgpt.com/checkout/{processor}/{checkout_session_id}
 
 - 服务会读取 Zeabur 提供的 `PORT` 环境变量。
 - 根路径 `/` 默认返回 `index.html`。
+- 健康检查路径：`/healthz`（返回 `{ "status": "ok" }`）。

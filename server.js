@@ -25,6 +25,13 @@ function safeResolve(requestPath) {
 
 const server = http.createServer((req, res) => {
   const urlPath = decodeURIComponent(req.url.split('?')[0]);
+
+  if (urlPath === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
   const filePath = urlPath === '/' ? safeResolve('index.html') : safeResolve(urlPath.slice(1));
 
   if (!filePath.startsWith(root)) {
