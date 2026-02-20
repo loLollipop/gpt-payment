@@ -248,10 +248,18 @@
       letter-spacing: 0.1em;
     }
 
+    .input-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
     /* Textarea input */
     .editor {
       width: 100%;
-      height: calc(100% - 41px);
+      height: auto;
+      flex: 1;
+      min-height: 160px;
       background: transparent;
       border: none;
       outline: none;
@@ -478,7 +486,7 @@
     <div class="workbench">
 
       <!-- Input panel -->
-      <div class="panel">
+      <div class="panel input-panel">
         <div class="panel-bar">
           <div class="panel-bar-left">
             <div class="panel-dot"></div>
