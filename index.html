@@ -267,6 +267,49 @@
     .editor::placeholder { color: var(--dim); font-size: 13px; }
     .editor:focus { background: rgba(255,149,0,0.015); }
 
+    .token-panel {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 10px;
+      background: rgba(255,149,0,0.02);
+    }
+
+    .token-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .token-input {
+      width: 100%;
+      background: rgba(2,3,5,0.7);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      outline: none;
+    }
+
+    .token-input:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 10px rgba(255,149,0,0.25);
+    }
+
+    .token-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn.small {
+      padding: 8px 14px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+    }
+
     /* Output panel */
     .output-panel {
       min-height: 72px;
@@ -444,6 +487,14 @@
           <div class="panel-status" id="charCount">AWAITING INPUT</div>
         </div>
         <textarea id="longUrl" class="editor" placeholder="PASTE FULL URL OR RAW TEXT HERE...&#10;&#10;支持直接粘贴包含链接的整段文字"></textarea>
+        <div class="token-panel">
+          <div class="token-label">ACCESS TOKEN 生成短链（后端代请求）</div>
+          <input id="accessToken" class="token-input" type="password" placeholder="粘贴 access token，例如 eyJ..." autocomplete="off" />
+          <div class="token-actions">
+            <button id="tokenPlusBtn" class="btn small">[ Token Plus ]</button>
+            <button id="tokenTeamBtn" class="btn small">[ Token Team ]</button>
+          </div>
+        </div>
       </div>
 
       <!-- Output panel -->
@@ -492,6 +543,7 @@
 
     // ── Char count ──
     const longUrl = document.getElementById('longUrl');
+    const accessTokenInput = document.getElementById('accessToken');
     longUrl.addEventListener('input', () => {
       const len = longUrl.value.length;
       document.getElementById('charCount').textContent = len > 0 ? `${len} CHARS` : 'AWAITING INPUT';
@@ -559,7 +611,34 @@
       }
     }
 
+    async function generateByToken(planType) {
+      const token = accessTokenInput.value.trim();
+      if (!token) {
+        setOutput('❌ 请先输入 access token。', 'error');
+        return;
+      }
+
+      incOps();
+      outputStatus.textContent = 'RUNNING';
+      statusText.textContent = 'WORK';
+
+      try {
+        const response = await fetch('/api/checkout-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: token, planType })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '生成失败');
+        setOutput(data.checkoutUrl, '');
+      } catch (error) {
+        setOutput('❌ ' + error.message, 'error');
+      }
+    }
+
     document.getElementById('extractBtn').addEventListener('click', runExtract);
+    document.getElementById('tokenPlusBtn').addEventListener('click', () => generateByToken('plus'));
+    document.getElementById('tokenTeamBtn').addEventListener('click', () => generateByToken('team'));
 
     longUrl.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runExtract();
