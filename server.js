@@ -74,7 +74,7 @@ function getWorkspaceNameFromToken(token) {
 }
 
 async function createCheckoutSession({ token, planType }) {
-  const cleanToken = token.trim();
+  const cleanToken = normalizeAccessToken(token);
   if (!cleanToken) throw new Error('access token 不能为空');
 
   let payload;
@@ -122,6 +122,9 @@ async function createCheckoutSession({ token, planType }) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('403 Forbidden：token 可能过期/无效，或 token 前缀格式错误（请仅粘贴 token 本体，支持自动去除 Bearer 前缀）');
+    }
     const message = data?.detail || data?.message || `请求失败 (${response.status})`;
     throw new Error(message);
   }
@@ -132,6 +135,14 @@ async function createCheckoutSession({ token, planType }) {
   }
   if (data.url) return data.url;
   throw new Error('未能从响应中提取短链接');
+}
+
+function normalizeAccessToken(token) {
+  if (typeof token !== 'string') return '';
+  const trimmed = token.trim();
+  if (!trimmed) return '';
+  const withoutQuotes = trimmed.replace(/^['\"]|['\"]$/g, '');
+  return withoutQuotes.replace(/^Bearer\s+/i, '').trim();
 }
 
 const server = http.createServer((req, res) => {

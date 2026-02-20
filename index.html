@@ -496,8 +496,8 @@
         </div>
         <textarea id="longUrl" class="editor" placeholder="PASTE FULL URL OR RAW TEXT HERE...&#10;&#10;支持直接粘贴包含链接的整段文字"></textarea>
         <div class="token-panel">
-          <div class="token-label">ACCESS TOKEN 生成短链（后端代请求）</div>
-          <input id="accessToken" class="token-input" type="password" placeholder="粘贴 access token，例如 eyJ..." autocomplete="off" />
+          <div class="token-label">ACCESS TOKEN 生成短链（后端代请求，支持粘贴 Bearer xxx）</div>
+          <input id="accessToken" class="token-input" type="password" placeholder="粘贴 access token（可包含 Bearer 前缀）" autocomplete="off" />
           <div class="token-actions">
             <button id="tokenPlusBtn" class="btn small">[ Token Plus ]</button>
             <button id="tokenTeamBtn" class="btn small">[ Token Team ]</button>
