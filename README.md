@@ -2,6 +2,8 @@
 
 一个简单的网页工具：输入 ChatGPT 支付长链接，提取对应短链接。
 
+另外支持使用 `access token` 直接请求 `POST /backend-api/payments/checkout` 并返回短链接（服务端代发请求）。
+
 ## 本地使用
 
 1. 打开 `index.html`。
@@ -16,6 +18,30 @@ https://chatgpt.com/checkout/{processor}/{checkout_session_id}
 ```
 
 默认 `processor` 为 `openai_llc`（当原始链接未提供时）。
+
+## Access token 直连 checkout（对齐 XHR 思路）
+
+项目内置接口：`POST /api/checkout-link`
+
+请求体示例：
+
+```json
+{
+  "accessToken": "Bearer eyJ...",
+  "planType": "plus",
+  "options": {
+    "referral_code": "",
+    "promo_campaign_id": "plus-1-month-free"
+  }
+}
+```
+
+说明：
+
+- `planType` 支持 `plus` / `team`。
+- `accessToken` 支持直接粘贴 `Bearer xxx`，服务端会自动去掉前缀。
+- `options` 可选，用于覆盖默认 promo/referral/team 参数。
+- 服务端会优先从 `checkout_session_id` 组装 `https://chatgpt.com/checkout/{processor}/{id}`，并兼容 `url / checkout_url / data.url` 等返回字段。
 
 ## 部署到 Zeabur
 
