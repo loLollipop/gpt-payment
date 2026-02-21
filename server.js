@@ -27,8 +27,85 @@ const TEAM_DEFAULTS = {
 };
 
 const PLUS_DEFAULTS = {
-  promo_campaign_id: 'plus-1-month-free'
+  promo_campaign_id: 'plus-1-month-free',
+  referral_code: ''
 };
+
+function buildPlusPayload(options = {}) {
+  const referralCode = (options.referral_code || '').trim();
+  const promoCampaignId = (options.promo_campaign_id || PLUS_DEFAULTS.promo_campaign_id || '').trim();
+
+  const payload = {
+    plan_type: 'plus',
+    checkout_ui_mode: 'custom',
+    cancel_url: 'https://chatgpt.com/',
+    success_url: 'https://chatgpt.com/'
+  };
+
+  if (referralCode) {
+    payload.referral_code = referralCode;
+    return payload;
+  }
+
+  if (promoCampaignId) {
+    payload.promo_campaign = {
+      promo_campaign_id: promoCampaignId,
+      is_coupon_from_query_param: false
+    };
+  }
+
+  return payload;
+}
+
+function buildTeamPayload(token, options = {}) {
+  const promoCampaignId = (options.promo_campaign_id || TEAM_DEFAULTS.promo_campaign_id || '').trim();
+
+  const payload = {
+    plan_name: 'chatgptteamplan',
+    team_plan_data: {
+      workspace_name: getWorkspaceNameFromToken(token),
+      price_interval: options.price_interval || TEAM_DEFAULTS.price_interval,
+      seat_quantity: Number(options.seat_quantity || TEAM_DEFAULTS.seat_quantity)
+    },
+    billing_details: {
+      country: (options.country || TEAM_DEFAULTS.country).toUpperCase(),
+      currency: (options.currency || TEAM_DEFAULTS.currency).toUpperCase()
+    },
+    cancel_url: 'https://chatgpt.com/#pricing',
+    checkout_ui_mode: 'custom'
+  };
+
+  if (promoCampaignId) {
+    payload.promo_campaign = {
+      promo_campaign_id: promoCampaignId,
+      is_coupon_from_query_param: false
+    };
+  }
+
+  return payload;
+}
+
+function extractCheckoutUrlFromResponse(data = {}) {
+  if (data.checkout_session_id) {
+    const processor = data.processor_entity || data.processor || 'openai_llc';
+    return `https://chatgpt.com/checkout/${processor}/${data.checkout_session_id}`;
+  }
+
+  if (typeof data.url === 'string' && data.url.trim()) return data.url.trim();
+
+  const nestedCandidates = [
+    data.checkout_url,
+    data.checkoutUrl,
+    data?.data?.url,
+    data?.data?.checkout_url,
+    data?.result?.url
+  ];
+  for (const value of nestedCandidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+
+  return '';
+}
 
 function safeResolve(requestPath) {
   const normalized = path.normalize(requestPath).replace(/^([.][.][/\\])+/, '');
@@ -73,42 +150,13 @@ function getWorkspaceNameFromToken(token) {
   return email.split('@')[0].slice(0, 32) || 'MyTeam';
 }
 
-async function createCheckoutSession({ token, planType }) {
+async function createCheckoutSession({ token, planType, options = {} }) {
   const cleanToken = normalizeAccessToken(token);
   if (!cleanToken) throw new Error('access token 不能为空');
 
-  let payload;
-  if (planType === 'team') {
-    payload = {
-      plan_name: 'chatgptteamplan',
-      team_plan_data: {
-        workspace_name: getWorkspaceNameFromToken(cleanToken),
-        price_interval: TEAM_DEFAULTS.price_interval,
-        seat_quantity: TEAM_DEFAULTS.seat_quantity
-      },
-      billing_details: {
-        country: TEAM_DEFAULTS.country,
-        currency: TEAM_DEFAULTS.currency
-      },
-      cancel_url: 'https://chatgpt.com/#pricing',
-      promo_campaign: {
-        promo_campaign_id: TEAM_DEFAULTS.promo_campaign_id,
-        is_coupon_from_query_param: false
-      },
-      checkout_ui_mode: 'custom'
-    };
-  } else {
-    payload = {
-      plan_type: 'plus',
-      checkout_ui_mode: 'custom',
-      cancel_url: 'https://chatgpt.com/',
-      success_url: 'https://chatgpt.com/',
-      promo_campaign: {
-        promo_campaign_id: PLUS_DEFAULTS.promo_campaign_id,
-        is_coupon_from_query_param: false
-      }
-    };
-  }
+  const payload = planType === 'team'
+    ? buildTeamPayload(cleanToken, options)
+    : buildPlusPayload(options);
 
   const response = await fetch('https://chatgpt.com/backend-api/payments/checkout', {
     method: 'POST',
@@ -129,11 +177,8 @@ async function createCheckoutSession({ token, planType }) {
     throw new Error(message);
   }
 
-  if (data.checkout_session_id) {
-    const processor = data.processor_entity || 'openai_llc';
-    return `https://chatgpt.com/checkout/${processor}/${data.checkout_session_id}`;
-  }
-  if (data.url) return data.url;
+  const checkoutUrl = extractCheckoutUrlFromResponse(data);
+  if (checkoutUrl) return checkoutUrl;
   throw new Error('未能从响应中提取短链接');
 }
 
@@ -160,13 +205,14 @@ const server = http.createServer((req, res) => {
         }
 
         const planType = body.planType === 'team' ? 'team' : 'plus';
+        const options = body.options && typeof body.options === 'object' ? body.options : {};
         if (!body.accessToken || typeof body.accessToken !== 'string') {
           sendJson(res, 400, { error: '缺少 accessToken' });
           return;
         }
 
         try {
-          const checkoutUrl = await createCheckoutSession({ token: body.accessToken, planType });
+          const checkoutUrl = await createCheckoutSession({ token: body.accessToken, planType, options });
           sendJson(res, 200, { checkoutUrl, planType });
         } catch (error) {
           sendJson(res, 400, { error: error.message || '生成短链接失败' });
